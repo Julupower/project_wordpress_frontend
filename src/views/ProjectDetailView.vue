@@ -6,6 +6,14 @@
     <div v-else-if="error" class="status error">{{ error }}</div>
     
     <article v-else-if="project" class="project-profile">
+      <div v-if="project.featuredImage?.node?.sourceUrl" class="detail-banner-wrapper">
+        <img 
+          :src="project.featuredImage.node.sourceUrl" 
+          :alt="project.featuredImage.node.altText || project.title" 
+          class="detail-banner"
+        />
+      </div>
+
       <header class="project-header">
         <h2>{{ project.title }}</h2>
         <span class="client-badge">{{ project.projectDetails?.clientName }}</span>
@@ -53,17 +61,28 @@ const error = ref(null);
 
 // Targeted GraphQL query utilizing schema filter variables
 const GET_PROJECT_BY_SLUG = gql`
-  query GetProjectBySlug($id: ID!) {
-    project(id: $id, idType: SLUG) {
-      title
-      content
-      projectDetails {
-        clientName
-        projectBudget
-        launchDate
-      }
+    query GetProjectBySlug($id: ID!) 
+    {
+        project(id: $id, idType: SLUG) 
+        {
+            title
+            content
+            projectDetails 
+            {
+                clientName
+                projectBudget
+                launchDate
+            }
+            featuredImage 
+            {
+                node 
+                {
+                    sourceUrl
+                    altText
+                }
+            }
+        }
     }
-  }
 `;
 
 const formatDate = (dateString) => {
@@ -118,4 +137,19 @@ onMounted(async () => {
 .content-main h3 { margin-top: 0; margin-bottom: 1rem; font-size: 1.25rem; color: #2d3748; }
 .wordpress-content { color: #4a5568; line-height: 1.7; }
 .no-content { color: #a0aec0; font-style: italic; }
+
+.detail-banner-wrapper {
+  width: 100%;
+  height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  background: #edf2f7;
+}
+
+.detail-banner {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 </style>
