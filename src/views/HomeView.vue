@@ -1,174 +1,137 @@
 <template>
-  <section class="portfolio-section">
-    <h2>Project Portfolio</h2>
+  <div class="portfolio-container p-6">
     
-    <div v-if="loading" class="status">Fetching architectural data layers...</div>
-    <div v-else-if="error" class="status error">{{ error }}</div>
-    
-    <div v-else class="project-grid">
+    <div class="filter-buttons mb-8 flex gap-4 flex-wrap" style="display: flex; gap: 10px; margin-bottom: 20px; position: relative; z-index: 10;">
+      <button 
+        @click="setCategory(null)" 
+        :style="{ backgroundColor: selectedCategory === null ? '#2563eb' : '#e5e7eb', color: selectedCategory === null ? '#fff' : '#000' }"
+        style="padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; transition: all 0.2s;"
+      >
+        All Projects
+      </button>
+
+      <button 
+        v-for="category in categories" 
+        :key="category.id"
+        @click="setCategory(category.slug)"
+        :style="{ backgroundColor: selectedCategory === category.slug ? '#2563eb' : '#e5e7eb', color: selectedCategory === category.slug ? '#fff' : '#000' }"
+        style="padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; transition: all 0.2s;"
+      >
+        {{ category.name }}
+      </button>
+    </div>
+
+    <div class="project-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
       <router-link 
         v-for="project in projects" 
-        :key="project.slug" 
-        :to="'/project/' + project.slug" 
-        class="project-card-link"
+        :key="project.id" 
+        :to="'/project/' + project.slug"
+        style="text-decoration: none; color: inherit; display: block;"
       >
-        <div class="project-card">
-          <div class="card-image-wrapper">
+        <div class="project-card" style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; background: #fff;">
+          
+          <div class="card-image-wrapper" style="width: 100%; height: 180px; background: #edf2f7; overflow: hidden; position: relative;">
             <img 
               v-if="project.featuredImage?.node?.sourceUrl" 
               :src="project.featuredImage.node.sourceUrl" 
-              :alt="project.featuredImage.node.altText || project.title"
-              class="card-thumbnail"
+              :alt="project.title"
+              style="width: 100%; height: 100%; object-fit: cover;"
             />
-            <div v-else class="image-placeholder">
-              <span>No Graphic Asset</span>
+            <div v-else style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e5e7eb; color: #6b7280;">
+              <span>No Image Available</span>
             </div>
           </div>
 
-          <div class="card-content">
-            <h3>{{ project.title }}</h3>
+          <div class="card-content" style="padding-top: 15px;">
+            <h3 style="margin-top: 0; color: #2c3e50;">{{ project.title }}</h3>
             <div class="meta-details">
-              <p><strong>Client:</strong> {{ project.projectDetails.clientName }}</p>
-              <p><strong>Budget:</strong> £{{ project.projectDetails.projectBudget?.toLocaleString() }}</p>
-              <p><strong>Launch Date:</strong> {{ formatDate(project.projectDetails.launchDate) }}</p>
+              <p v-if="project.categories?.nodes?.length" style="margin: 0; color: #4a5568;">
+                <strong>Category:</strong> {{ project.categories.nodes.map(c => c.name).join(', ') }}
+              </p>
             </div>
           </div>
+
         </div>
       </router-link>
     </div>
-  </section>
+
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { gql } from 'graphql-request';
-import { graphQLClient } from '../api/client';
+import { ref, onMounted } from 'vue'
+import { request, gql } from 'graphql-request'
 
-const projects = ref([]);
-const loading = ref(true);
-const error = ref(null);
+const endpoint = 'http://localhost:8081/graphql'
 
-// Updated query payload to pull down the featured image media node structure
-const PORTFOLIO_DATA_QUERY = gql`
-    query GetPortfolioData 
-    {
-        projects 
-        {
-            nodes 
-            {
-                title
-                slug
-                projectDetails 
-                {
-                    clientName
-                    projectBudget
-                    launchDate
-                }
-                featuredImage 
-                {
-                    node 
-                    {
-                        sourceUrl
-                        altText
-                    }
-                }
-            }
-        }
+const projects = ref([])
+const categories = ref([])
+const selectedCategory = ref(null)
+
+const GET_ALL_CATEGORIES = gql`
+  query GetAllCategories {
+    categories(where: { hideEmpty: true }) {
+      nodes {
+        id
+        name
+        slug
+      }
     }
-`;
+  }
+`
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
+const GET_FILTERED_PROJECTS = gql`
+  query GetFilteredProjects($categoryName: String) {
+    posts(where: { categoryName: $categoryName }) {
+      nodes {
+        id
+        title
+        slug
+        featuredImage {
+          node {
+            sourceUrl
+          }
+        }
+        categories {
+          nodes {
+            name
+            slug
+          }
+        }
+      }
+    }
+  }
+`
+
+const fetchProjects = async (categorySlug = null) => {
+  try {
+    const variables = {}
+    if (categorySlug) {
+      variables.categoryName = categorySlug
+    }
+    const data = await request(endpoint, GET_FILTERED_PROJECTS, variables)
+    projects.value = data.posts.nodes
+  } catch (error) {
+    console.error("Error streaming project data from WPGraphQL:", error)
+  }
+}
 
 onMounted(async () => {
   try {
-    const data = await graphQLClient.request(PORTFOLIO_DATA_QUERY);
-    projects.value = data.projects.nodes;
-  } catch (err) {
-    console.error('Data pull failed:', err);
-    error.value = 'Failed to extract custom records from the data layer.';
-  } finally {
-    loading.value = false;
+    const categoryData = await request(endpoint, GET_ALL_CATEGORIES)
+    categories.value = categoryData.categories.nodes
+  } catch (error) {
+    console.error("Error streaming categories:", error)
   }
-});
+  await fetchProjects()
+})
+
+const setCategory = async (slug) => {
+  selectedCategory.value = slug
+  await fetchProjects(slug)
+}
 </script>
 
 <style scoped>
-h2 { color: #34495e; border-left: 4px solid #41b883; padding-left: 10px; margin-bottom: 1.5rem; }
-.status { text-align: center; font-weight: bold; color: #e67e22; padding: 2rem; }
-.error { color: #c0392b; }
-.project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
-.project-card-link { text-decoration: none; color: inherit; }
-
-/* Refined Card Architecture */
-.project-card { 
-  background: #ffffff; 
-  border: 1px solid #e2e8f0; 
-  border-radius: 8px; 
-  overflow: hidden; /* Ensures the thumbnail corners follow the card border radius */
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); 
-  transition: transform 0.2s ease, box-shadow 0.2s ease; 
-  height: 100%; 
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box; 
-}
-.project-card:hover { 
-  transform: translateY(-4px); 
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-/* Image Container Formatting */
-.card-image-wrapper {
-  width: 100%;
-  height: 180px;
-  background: #edf2f7;
-  overflow: hidden;
-  position: relative;
-}
-.card-thumbnail {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* Forces the image to crop nicely without stretching proportions */
-}
-.image-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
-  color: #a0aec0;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.card-content {
-  padding: 1.5rem;
-  flex-grow: 1;
-}
-.project-card h3 { margin-top: 0; color: #2c3e50; font-size: 1.25rem; border-bottom: 1px solid #edf2f7; padding-bottom: 0.75rem; }
-.meta-details p { margin: 0.5rem 0; font-size: 0.95rem; color: #4a5568; }
-/* 1. Force the router link to behave like a block-level container */
-.project-grid a {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-
-/* 2. Explicitly style the fallback block text inside the image wrapper */
-.image-placeholder span {
-  color: #718096;
-  font-weight: 600;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+/* Scoped styles can remain here for further custom aesthetic tweaks */
 </style>

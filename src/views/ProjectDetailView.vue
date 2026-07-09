@@ -1,115 +1,92 @@
 <template>
-  <div class="project-detail-container">
-    <router-link to="/" class="back-btn">← Back to Portfolio</router-link>
+  <div class="project-detail-container p-8" style="max-width: 800px; margin: 0 auto; font-family: sans-serif;">
     
-    <div v-if="loading" class="status">Querying deep data layers...</div>
-    <div v-else-if="error" class="status error">{{ error }}</div>
-    
-    <article v-else-if="project" class="project-profile">
-      <div v-if="project.featuredImage?.node?.sourceUrl" class="detail-banner-wrapper">
+    <router-link to="/" style="display: inline-block; margin-bottom: 20px; color: #2563eb; text-decoration: none;">
+      ← Back to Projects
+    </router-link>
+
+    <div v-if="loading" class="loading-state">
+      <p>Loading project details...</p>
+    </div>
+
+    <div v-else-if="project" class="project-content-view">
+      <div v-if="project.featuredImage?.node?.sourceUrl" class="detail-hero-wrapper" style="margin-bottom: 24px;">
         <img 
           :src="project.featuredImage.node.sourceUrl" 
-          :alt="project.featuredImage.node.altText || project.title" 
-          class="detail-banner"
+          :alt="project.title" 
+          style="width: 100%; max-height: 400px; object-fit: cover; border-radius: 8px;"
         />
       </div>
 
-      <header class="project-header">
-        <h2>{{ project.title }}</h2>
-        <span class="client-badge">{{ project.projectDetails?.clientName }}</span>
-      </header>
+      <h1 style="font-size: 2.5rem; color: #1e293b; margin-top: 0; margin-bottom: 8px;">
+        {{ project.title }}
+      </h1>
       
-      <div class="project-body">
-        <div class="metrics-sidebar">
-          <h3>Project Metrics</h3>
-          <div class="metric-row">
-            <span class="label">Financial Budget:</span>
-            <span class="value">£{{ project.projectDetails?.projectBudget?.toLocaleString() }}</span>
-          </div>
-          <div class="metric-row">
-            <span class="label">Target Launch:</span>
-            <span class="value">{{ formatDate(project.projectDetails?.launchDate) }}</span>
-          </div>
-        </div>
-        
-        <div class="content-main">
-          <h3>Scope of Work</h3>
-          <div v-if="project.content" v-html="project.content" class="wordpress-content"></div>
-          <p v-else class="no-content">No supplemental scope text provided for this ledger entry.</p>
-        </div>
-      </div>
-    </article>
+      <p v-if="project.categories?.nodes?.length" style="color: #64748b; font-size: 0.95rem; margin-bottom: 24px;">
+        <strong>Category:</strong> {{ project.categories.nodes.map(c => c.name).join(', ') }}
+      </p>
+
+      <div 
+        class="wordpress-content-render" 
+        v-html="project.content"
+        style="line-height: 1.6; color: #334155; font-size: 1.1rem;"
+      ></div>
+    </div>
+
+    <div v-else class="error-state">
+      <p>Project details could not be found.</p>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { gql } from 'graphql-request';
-import { graphQLClient } from '../api/client';
+    import { ref, onMounted } from 'vue'
+    import { request, gql } from 'graphql-request'
 
-// Accept the dynamic router slug directly as a component configuration property
-const props = defineProps({
-  slug: {
-    type: String,
-    required: true
-  }
-});
+    // 1. Capture the incoming dynamic parameter from router.js automatically
+    const props = defineProps({
+      slug: {
+        type: String,
+        required: true
+      }
+    })
 
-const project = ref(null);
-const loading = ref(true);
-const error = ref(null);
+    const endpoint = 'http://localhost:8081/graphql'
+    const project = ref(null)
+    const loading = ref(true)
 
-// Targeted GraphQL query utilizing schema filter variables
-const GET_PROJECT_BY_SLUG = gql`
-    query GetProjectBySlug($id: ID!) 
-    {
-        project(id: $id, idType: SLUG) 
-        {
-            title
-            content
-            projectDetails 
-            {
-                clientName
-                projectBudget
-                launchDate
+    // 2. Query to fetch a singular post filtered by its exact alphanumeric slug
+    const GET_PROJECT_BY_SLUG = gql`
+      query GetProjectBySlug($slug: ID!) {
+        post(id: $slug, idType: SLUG) {
+          title
+          content
+          featuredImage {
+            node {
+              sourceUrl
             }
-            featuredImage 
-            {
-                node 
-                {
-                    sourceUrl
-                    altText
-                }
+          }
+          categories {
+            nodes {
+              name
             }
+          }
         }
-    }
-`;
+      }
+    `
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
-
-onMounted(async () => {
-  try {
-    // Pass the route component property slug directly into the operational GraphQL parameters argument object
-    const data = await graphQLClient.request(GET_PROJECT_BY_SLUG, { id: props.slug });
-    project.value = data.project;
-    if (!data.project) {
-      error.value = 'Requested project data ledger could not be found.';
-    }
-  } catch (err) {
-    console.error('Individual node pull failed:', err);
-    error.value = 'Failed to fetch the target project node details.';
-  } finally {
-    loading.value = false;
-  }
-});
+    onMounted(async () => {
+      try {
+        // Pass the route parameter straight into our GraphQL variables container
+        const variables = { slug: props.slug }
+        const data = await request(endpoint, GET_PROJECT_BY_SLUG, variables)
+        project.value = data.post
+      } catch (error) {
+        console.error("Error retrieving detailed post payload:", error)
+      } finally {
+        loading.value = false
+      }
+    })
 </script>
 
 <style scoped>
