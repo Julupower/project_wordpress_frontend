@@ -34,14 +34,14 @@
         </div>
       </header>
 
-      <!-- Optimized Presentation Media Render -->
-      <div v-if="project.featuredImage" class="w-full max-h-[450px] overflow-hidden rounded-xl bg-slate-100 mb-8 shadow-inner">
-        <img 
-          :src="project.featuredImage.node.sourceUrl" 
-          :alt="project.title"
-          class="w-full h-full object-cover"
-        />
-      </div>
+    <!-- Optimized Presentation Media Render -->
+    <div v-if="project.featuredImage" class="w-full max-h-[500px] overflow-hidden rounded-xl bg-slate-50 mb-8 border border-slate-100 flex justify-center items-center">
+      <img 
+        :src="project.featuredImage.node.sourceUrl" 
+        :alt="project.title"
+        class="max-w-full max-h-[500px] object-contain"
+      />
+    </div>
 
       <!-- Decoupled Body Content Container -->
       <div 
