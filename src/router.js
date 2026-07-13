@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from './views/HomeView.vue';
 import ProjectDetailView from './views/ProjectDetailView.vue';
+import NotFoundView from './views/NotFoundView.vue'; // 1. Import the new view
 
 const routes = [
   {
@@ -12,7 +13,13 @@ const routes = [
     path: '/project/:slug',
     name: 'ProjectDetail',
     component: ProjectDetailView,
-    props: true // Automatically injects the string matching ':slug' as a prop into the component
+    props: true
+  },
+  {
+    // 2. Catch-all route to intercept any invalid URL path strings entered by the user
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: NotFoundView
   }
 ];
 
@@ -22,4 +29,3 @@ const router = createRouter({
 });
 
 export default router;
-

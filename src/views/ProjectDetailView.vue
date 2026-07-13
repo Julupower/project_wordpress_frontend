@@ -42,8 +42,8 @@
 <script setup>
     import { ref, onMounted } from 'vue'
     import { request, gql } from 'graphql-request'
+    import { useRouter } from 'vue-router' // 1. Import useRouter
 
-    // 1. Capture the incoming dynamic parameter from router.js automatically
     const props = defineProps({
       slug: {
         type: String,
@@ -51,11 +51,11 @@
       }
     })
 
+    const router = useRouter() // 2. Initialize the router instance
     const endpoint = 'http://localhost:8081/graphql'
     const project = ref(null)
     const loading = ref(true)
 
-    // 2. Query to fetch a singular post filtered by its exact alphanumeric slug
     const GET_PROJECT_BY_SLUG = gql`
       query GetProjectBySlug($slug: ID!) {
         post(id: $slug, idType: SLUG) {
@@ -77,17 +77,26 @@
 
     onMounted(async () => {
       try {
-        // Pass the route parameter straight into our GraphQL variables container
         const variables = { slug: props.slug }
         const data = await request(endpoint, GET_PROJECT_BY_SLUG, variables)
+
+        // 3. If the response payload node is empty, push the router to our 404 state
+        if (!data.post) {
+          router.replace({ name: 'NotFound' })
+          return
+        }
+
         project.value = data.post
       } catch (error) {
         console.error("Error retrieving detailed post payload:", error)
+        router.replace({ name: 'NotFound' })
       } finally {
         loading.value = false
       }
     })
 </script>
+
+<!-- Keep your template block exactly the same as it was -->
 
 <style scoped>
 .project-detail-container { max-width: 900px; margin: 0 auto; }
