@@ -22,3 +22,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# IDE and Editor Specific Folders
+nbproject/
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Local Node & Build files
+node_modules/
+dist/
+.env
+.env.local
