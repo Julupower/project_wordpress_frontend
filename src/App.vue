@@ -1,11 +1,11 @@
 <template>
   <div class="app-container">
-    <header>
+    <!-- header>
       <router-link to="/" class="brand-link">
         <h1>PROJECT WORDPRESS</h1>
       </router-link>
       <p class="tagline">Decoupled Architecture Showcase</p>
-    </header>
+    </header -->
     
     <main>
       <router-view />
