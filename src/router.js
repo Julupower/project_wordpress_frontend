@@ -20,7 +20,14 @@ const routes = [
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: NotFoundView
-  }
+  },
+  {
+      path: '/project/:slug',
+      name: 'ProjectDetail',
+      // Lazy-load this route for optimized performance
+      component: () => import('./views/ProjectDetail.vue'),
+      props: true // Allows passing the slug parameter directly as a prop
+    }
 ];
 
 const router = createRouter({
