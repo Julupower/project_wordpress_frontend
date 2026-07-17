@@ -31,6 +31,29 @@
       <h2 class="text-xl font-bold mb-2">Project Not Found</h2>
       <p class="text-sm">We could not find any project details matching the slug: <code class="font-mono">{{ slug }}</code></p>
     </div>
+    
+
+<!--     Case Study Layout (Active State) 
+    <article v-else class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+      <header class="mb-6 pb-6 border-b border-slate-100">
+        <div class="flex items-center gap-2 mb-3">
+          <span 
+            v-for="cat in project.categories?.nodes" 
+            :key="cat.name"
+            class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-md"
+          >
+            {{ cat.name }}
+          </span>
+        </div>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-slate-800 mt-2">
+          {{ project.title }}
+        </h1>
+      </header>
+
+       Render WordPress HTML Content Safely 
+      <section class="prose max-w-none text-slate-600 leading-relaxed" v-html="project.content">
+      </section>
+    </article>-->
 
     <!-- Case Study Layout (Active State) -->
     <article v-else class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
@@ -49,9 +72,16 @@
         </h1>
       </header>
 
-      <!-- Render WordPress HTML Content Safely -->
-      <section class="prose max-w-none text-slate-600 leading-relaxed" v-html="project.content">
-      </section>
+      <!-- Featured Image Display with Null Safety Check -->
+      <div v-if="project.featuredImage?.node" class="mb-8 overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+        <img 
+          :src="project.featuredImage.node.sourceUrl" 
+          :alt="project.featuredImage.node.altText || project.title"
+          class="w-full h-auto max-h-[450px] object-cover block"
+        />
+      </div>
+
+      <section class="max-w-none text-slate-700 leading-relaxed space-y-6 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-slate-800 [&_h2]:mt-8 [&_h2]:mb-4 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-2" v-html="project.content"></section>
     </article>
 
   </div>
@@ -84,6 +114,12 @@ const GET_PROJECT_DETAIL = gql`
       categories {
         nodes {
           name
+        }
+      }
+      featuredImage {
+        node {
+          sourceUrl
+          altText
         }
       }
     }
