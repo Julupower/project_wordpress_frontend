@@ -1,185 +1,191 @@
-<template>
-  <div class="max-w-6xl mx-auto px-4 py-8 font-sans">
-    
-    <!-- Hero / Header Section -->
-    <header class="text-center mb-12">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-slate-800 tracking-tight mb-2">
-        PROJECT WORDPRESS
-      </h1>
-      <p class="text-lg md:text-xl text-slate-500 italic">
-        Decoupled Architecture Showcase
-      </p>
-      <div class="w-24 h-1 bg-blue-600 mx-auto mt-6 rounded-full"></div>
-    </header>
-
-    <!-- Navigation / Category Filters -->
-    <nav class="flex flex-wrap justify-center gap-2 mb-10" aria-label="Project Categories">
-      <button 
-        @click="selectCategory(null)"
-        :class="[
-          'px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer',
-          selectedCategory === null 
-            ? 'bg-blue-600 text-white shadow-md shadow-blue-200' 
-            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-        ]"
-      >
-        All Projects
-      </button>
-      
-      <button 
-        v-for="cat in categories" 
-        :key="cat.id"
-        @click="selectCategory(cat.name)"
-        :class="[
-          'px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer',
-          selectedCategory === cat.name 
-            ? 'bg-blue-600 text-white shadow-md shadow-blue-200' 
-            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-        ]"
-      >
-        {{ cat.name }}
-      </button>
-    </nav>
-
-    <!-- MAIN INTERFACE CANVAS -->
-    
-    <!-- Loading State: Skeleton Loader Grid -->
-    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      <ProjectSkeleton v-for="n in 3" :key="n" />
-    </div>
-
-    <!-- Active State: Project Grid -->
-    <div v-else-if="filteredProjects.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      <article 
-        v-for="project in filteredProjects" 
-        :key="project.slug"
-        class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col"
-      >
-        <!-- Project Image -->
-        <div v-if="project.featuredImage" class="h-48 overflow-hidden bg-slate-100 relative">
-          <img 
-            :src="project.featuredImage.node.sourceUrl" 
-            :alt="project.title"
-            class="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500"
-          />
-        </div>
-        
-        <!-- Fallback standard color block if no image is present -->
-        <div v-else class="h-48 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-          <span class="text-slate-400 text-sm font-medium">No Image Available</span>
-        </div>
-
-        <!-- Project Content -->
-        <div class="p-6 flex-1 flex flex-col justify-between">
-          <div>
-            <h2 class="text-xl font-bold text-slate-800 mb-2 hover:text-blue-600 transition-colors">
-              {{ project.title }}
-            </h2>
-            
-            <!-- Category Badges -->
-            <div class="flex flex-wrap gap-1.5 mb-4">
-              <span 
-                v-for="cat in project.categories?.nodes" 
-                :key="cat.name"
-                class="bg-slate-50 text-slate-500 text-xs font-semibold px-2.5 py-0.5 rounded border border-slate-200"
-              >
-                Category: {{ cat.name }}
-              </span>
-            </div>
-
-            <!-- Excerpt -->
-            <div 
-              class="text-slate-600 text-sm leading-relaxed mb-6 line-clamp-3"
-              v-html="project.excerpt"
-            ></div>
-          </div>
-
-          <!-- Navigation Trigger -->
-          <router-link 
-            :to="{ name: 'ProjectDetail', params: { slug: project.slug } }"
-            class="block text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-colors duration-200 mt-auto no-underline"
-          >
-            Explore Technical Details
-          </router-link>
-        </div>
-      </article>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else class="text-center py-16 bg-slate-50 border border-slate-200 rounded-2xl">
-      <p class="text-slate-500 font-medium text-lg">No projects found in this category.</p>
-    </div>
-
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { request, gql } from 'graphql-request'
-import ProjectSkeleton from '../components/ProjectSkeleton.vue'
+import { useSEO } from '../composables/useSEO'
 
-const endpoint = 'http://localhost:8081/graphql'
-
+// Reactive state
 const projects = ref([])
 const categories = ref([])
-const selectedCategory = ref(null)
+const selectedCategory = ref('ALL')
 const loading = ref(true)
+const error = ref(null)
 
-const GET_PORTFOLIO_DATA = gql`
-  query GetPortfolioData {
-    posts {
-      nodes {
-        title
-        slug
-        excerpt
-        featuredImage {
-          node {
-            sourceUrl
-          }
-        }
-        categories {
-          nodes {
-            id
-            name
-          }
-        }
-      }
-    }
+// Dynamic SEO initialization
+useSEO('Portfolio Case Studies', 'Explore technical case studies and full-stack software development projects.')
+
+const GRAPHQL_ENDPOINT = 'http://localhost:8081/graphql'
+
+// GraphQL Query: Fetch Categories and Posts dynamically based on selected category
+const GET_PROJECTS_AND_CATEGORIES = gql`
+  query GetProjectsAndCategories($categoryName: String) {
     categories {
       nodes {
         id
         name
+        slug
+      }
+    }
+    posts(where: { categoryName: $categoryName }) {
+      nodes {
+        id
+        title
+        slug
+        excerpt
+        categories {
+          nodes {
+            name
+          }
+        }
+        featuredImage {
+          node {
+            sourceUrl
+            altText
+          }
+        }
       }
     }
   }
 `
 
-onMounted(async () => {
-  try {
-    const data = await request(endpoint, GET_PORTFOLIO_DATA)
-    projects.value = data.posts.nodes
-    categories.value = data.categories.nodes.filter(cat => cat.name !== 'Uncategorized')
-  } catch (error) {
-    console.error("Error fetching repository assets from endpoint:", error)
-  } finally {
-    // Keep the loading state active for a tiny, simulated duration 
-    // to verify skeleton rendering patterns in local environments
-    setTimeout(() => {
-      loading.value = false
-    }, 800)
-  }
-})
+// Fetch data function
+const fetchData = async () => {
+  loading.value = true
+  error.value = null
 
-const selectCategory = (categoryName) => {
-  selectedCategory.value = categoryName
+  try {
+    const variables = {
+      categoryName: selectedCategory.value === 'ALL' ? null : selectedCategory.value
+    }
+    
+    const response = await request(GRAPHQL_ENDPOINT, GET_PROJECTS_AND_CATEGORIES, variables)
+    
+    categories.value = response.categories?.nodes || []
+    projects.value = response.posts?.nodes || []
+  } catch (err) {
+    console.error('GraphQL Error:', err)
+    error.value = 'Failed to load projects. Ensure the GraphQL endpoint is operational.'
+  } finally {
+    loading.value = false
+  }
 }
 
-const filteredProjects = computed(() => {
-  if (!selectedCategory.value) {
-    return projects.value
-  }
-  return projects.value.filter(project => 
-    project.categories?.nodes.some(cat => cat.name === selectedCategory.value)
-  )
+// Re-fetch posts whenever selected category changes
+watch(selectedCategory, () => {
+  fetchData()
+})
+
+onMounted(() => {
+  fetchData()
 })
 </script>
+
+<template>
+  <main class="max-w-6xl mx-auto px-4 py-12">
+    <!-- Header Section -->
+    <header class="mb-10 text-center">
+      <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
+        Engineered Solutions & Case Studies
+      </h1>
+      <p class="text-slate-600 max-w-2xl mx-auto">
+        Filter through architectural case studies and full-stack enterprise applications built with modern frontend and backend frameworks.
+      </p>
+    </header>
+
+    <!-- Category Filter Bar -->
+    <div class="flex flex-wrap items-center justify-center gap-2 mb-10">
+      <button
+        @click="selectedCategory = 'ALL'"
+        :class="[
+          'px-4 py-2 text-sm font-semibold rounded-full transition-all duration-200',
+          selectedCategory === 'ALL'
+            ? 'bg-blue-600 text-white shadow-md'
+            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+        ]"
+      >
+        All Projects
+      </button>
+
+      <button
+        v-for="category in categories"
+        :key="category.id"
+        @click="selectedCategory = category.slug"
+        :class="[
+          'px-4 py-2 text-sm font-semibold rounded-full transition-all duration-200',
+          selectedCategory === category.slug
+            ? 'bg-blue-600 text-white shadow-md'
+            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+        ]"
+      >
+        {{ category.name }}
+      </button>
+    </div>
+
+    <!-- State 1: Skeleton Loader -->
+    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-for="i in 3" :key="i" class="bg-white border border-slate-200 rounded-xl p-6 animate-pulse">
+        <div class="h-48 bg-slate-200 rounded-lg mb-4"></div>
+        <div class="h-6 bg-slate-200 rounded w-3/4 mb-3"></div>
+        <div class="h-4 bg-slate-200 rounded w-full mb-2"></div>
+        <div class="h-4 bg-slate-200 rounded w-2/3"></div>
+      </div>
+    </div>
+
+    <!-- State 2: Error UI -->
+    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-8 text-center max-w-md mx-auto">
+      <p class="text-red-600 font-medium mb-4">{{ error }}</p>
+      <button @click="fetchData" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm">
+        Retry
+      </button>
+    </div>
+
+    <!-- State 3: Empty State (No posts for selected category) -->
+    <div v-else-if="projects.length === 0" class="text-center py-16 bg-slate-50 border border-dashed border-slate-300 rounded-2xl">
+      <p class="text-slate-500 font-medium text-lg">No projects found for this category filter.</p>
+    </div>
+
+    <!-- State 4: Project Grid -->
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <article 
+        v-for="project in projects" 
+        :key="project.id" 
+        class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+      >
+        <div v-if="project.featuredImage?.node" class="h-48 overflow-hidden bg-slate-100 border-b border-slate-100">
+          <img 
+            :src="project.featuredImage.node.sourceUrl" 
+            :alt="project.featuredImage.node.altText || project.title"
+            class="w-full h-full object-cover"
+          />
+        </div>
+        
+        <div class="p-6 flex-1 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-3">
+              <span 
+                v-for="cat in project.categories?.nodes" 
+                :key="cat.name"
+                class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded"
+              >
+                {{ cat.name }}
+              </span>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800 mb-2">
+              {{ project.title }}
+            </h2>
+            <div 
+              class="text-sm text-slate-600 leading-relaxed mb-4 line-clamp-3" 
+              v-html="project.excerpt"
+            ></div>
+          </div>
+
+          <router-link 
+            :to="`/project/${project.slug}`"
+            class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors mt-4"
+          >
+            View Technical Case Study &rarr;
+          </router-link>
+        </div>
+      </article>
+    </div>
+  </main>
+</template>
