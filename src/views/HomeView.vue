@@ -8,16 +8,22 @@ const projects = ref([])
 const categories = ref([])
 const selectedCategory = ref('ALL')
 const loading = ref(true)
+const loadingMore = ref(false)
 const error = ref(null)
+
+// Pagination state
+const hasNextPage = ref(false)
+const endCursor = ref(null)
+const PAGE_SIZE = 3
 
 // Dynamic SEO initialization
 useSEO('Portfolio Case Studies', 'Explore technical case studies and full-stack software development projects.')
 
 const GRAPHQL_ENDPOINT = 'http://localhost:8081/graphql'
 
-// GraphQL Query: Fetch Categories and Posts dynamically based on selected category
+// GraphQL Query with Cursor-Based Pagination Parameters
 const GET_PROJECTS_AND_CATEGORIES = gql`
-  query GetProjectsAndCategories($categoryName: String) {
+  query GetProjectsAndCategories($categoryName: String, $first: Int, $after: String) {
     categories {
       nodes {
         id
@@ -25,7 +31,11 @@ const GET_PROJECTS_AND_CATEGORIES = gql`
         slug
       }
     }
-    posts(where: { categoryName: $categoryName }) {
+    posts(where: { categoryName: $categoryName }, first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         id
         title
@@ -47,35 +57,57 @@ const GET_PROJECTS_AND_CATEGORIES = gql`
   }
 `
 
-// Fetch data function
-const fetchData = async () => {
-  loading.value = true
+// Fetch data function supporting initial load and append pagination
+const fetchData = async (isLoadMore = false) => {
+  if (isLoadMore) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    projects.value = []
+    endCursor.value = null
+  }
+  
   error.value = null
 
   try {
     const variables = {
-      categoryName: selectedCategory.value === 'ALL' ? null : selectedCategory.value
+      categoryName: selectedCategory.value === 'ALL' ? null : selectedCategory.value,
+      first: PAGE_SIZE,
+      after: isLoadMore ? endCursor.value : null
     }
     
     const response = await request(GRAPHQL_ENDPOINT, GET_PROJECTS_AND_CATEGORIES, variables)
     
-    categories.value = response.categories?.nodes || []
-    projects.value = response.posts?.nodes || []
+    // Update categories on initial load
+    if (!isLoadMore) {
+      categories.value = response.categories?.nodes || []
+    }
+
+    const fetchedPosts = response.posts?.nodes || []
+    const pageInfo = response.posts?.pageInfo || {}
+
+    // Append posts if loading more, otherwise set array
+    projects.value = isLoadMore ? [...projects.value, ...fetchedPosts] : fetchedPosts
+    
+    // Update pagination pointers
+    hasNextPage.value = pageInfo.hasNextPage || false
+    endCursor.value = pageInfo.endCursor || null
   } catch (err) {
     console.error('GraphQL Error:', err)
     error.value = 'Failed to load projects. Ensure the GraphQL endpoint is operational.'
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
-// Re-fetch posts whenever selected category changes
+// Reset pagination and re-fetch when category filter changes
 watch(selectedCategory, () => {
-  fetchData()
+  fetchData(false)
 })
 
 onMounted(() => {
-  fetchData()
+  fetchData(false)
 })
 </script>
 
@@ -133,59 +165,73 @@ onMounted(() => {
     <!-- State 2: Error UI -->
     <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-8 text-center max-w-md mx-auto">
       <p class="text-red-600 font-medium mb-4">{{ error }}</p>
-      <button @click="fetchData" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm">
+      <button @click="fetchData(false)" class="px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm">
         Retry
       </button>
     </div>
 
-    <!-- State 3: Empty State (No posts for selected category) -->
+    <!-- State 3: Empty State -->
     <div v-else-if="projects.length === 0" class="text-center py-16 bg-slate-50 border border-dashed border-slate-300 rounded-2xl">
       <p class="text-slate-500 font-medium text-lg">No projects found for this category filter.</p>
     </div>
 
     <!-- State 4: Project Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <article 
-        v-for="project in projects" 
-        :key="project.id" 
-        class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
-      >
-        <div v-if="project.featuredImage?.node" class="h-48 overflow-hidden bg-slate-100 border-b border-slate-100">
-          <img 
-            :src="project.featuredImage.node.sourceUrl" 
-            :alt="project.featuredImage.node.altText || project.title"
-            class="w-full h-full object-cover"
-          />
-        </div>
-        
-        <div class="p-6 flex-1 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center gap-2 mb-3">
-              <span 
-                v-for="cat in project.categories?.nodes" 
-                :key="cat.name"
-                class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded"
-              >
-                {{ cat.name }}
-              </span>
-            </div>
-            <h2 class="text-xl font-bold text-slate-800 mb-2">
-              {{ project.title }}
-            </h2>
-            <div 
-              class="text-sm text-slate-600 leading-relaxed mb-4 line-clamp-3" 
-              v-html="project.excerpt"
-            ></div>
+    <div v-else>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <article 
+          v-for="project in projects" 
+          :key="project.id" 
+          class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+        >
+          <div v-if="project.featuredImage?.node" class="h-48 overflow-hidden bg-slate-100 border-b border-slate-100">
+            <img 
+              :src="project.featuredImage.node.sourceUrl" 
+              :alt="project.featuredImage.node.altText || project.title"
+              class="w-full h-full object-cover"
+            />
           </div>
+          
+          <div class="p-6 flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center gap-2 mb-3">
+                <span 
+                  v-for="cat in project.categories?.nodes" 
+                  :key="cat.name"
+                  class="text-xs font-bold text-blue-600 uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded"
+                >
+                  {{ cat.name }}
+                </span>
+              </div>
+              <h2 class="text-xl font-bold text-slate-800 mb-2">
+                {{ project.title }}
+              </h2>
+              <div 
+                class="text-sm text-slate-600 leading-relaxed mb-4 line-clamp-3" 
+                v-html="project.excerpt"
+              ></div>
+            </div>
 
-          <router-link 
-            :to="`/project/${project.slug}`"
-            class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors mt-4"
-          >
-            View Technical Case Study &rarr;
-          </router-link>
-        </div>
-      </article>
+            <router-link 
+              :to="`/project/${project.slug}`"
+              class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors mt-4"
+            >
+              View Technical Case Study &rarr;
+            </router-link>
+          </div>
+        </article>
+      </div>
+
+      <!-- Pagination Load More Control -->
+      <div v-if="hasNextPage" class="mt-12 text-center">
+        <button
+          @click="fetchData(true)"
+          :disabled="loadingMore"
+          class="px-6 py-3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-semibold text-sm rounded-xl shadow-md transition-all duration-200 inline-flex items-center gap-2"
+        >
+          <span v-if="loadingMore" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          <span>{{ loadingMore ? 'Fetching Records...' : 'Load More Projects' }}</span>
+        </button>
+      </div>
     </div>
   </main>
 </template>
